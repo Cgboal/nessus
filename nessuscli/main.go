@@ -1,27 +1,14 @@
-#### Introduction
-This repository provides a golang library which can be used to launch and export nessus scans by interacting with the web api directly. 
-
-#### Usage
-
-See the relevant godocs for more in-depth usage information.
-
-If you don't want to use the library, and only launch scans, you can install the minimal scan launcher script with `go get github.com/Cgboal/nessus/nessuscli`.
-
-#### Example usage
-The following code snippet shows how this library can be used to launch nessus scans. 
-
-``` golang
 package main
 
 import (
-	"github.com/cgboal/nessus"
-	"os"
-	"fmt"
 	"flag"
+	"fmt"
+	"github.com/Cgboal/nessus"
 	"log"
+	"os"
 )
 
-func main () {
+func main() {
 	hostname, _ := os.Hostname()
 
 	targets := flag.String("t", "", "Comma seperated list of targets to feed to nessus")
@@ -47,12 +34,5 @@ func main () {
 	}
 
 	nessus.Authenticate()
-	scanId := nessus.LaunchScan(*name, *targets)
-    
-    nessus.Wait(scanId)
-    report, _ := nessus.ExportAsNessus(scanId)
-    fmt.Println(report)
-
+	nessus.LaunchScan(*name, *targets)
 }
-
-```
