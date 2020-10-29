@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/buger/jsonparser"
 	"io/ioutil"
 	"log"
@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"text/template"
 	"time"
+	"fmt"
 )
 
 // struct which stores relevant nessus config information
@@ -66,7 +67,8 @@ func NewNessus(url string) Nessus {
 // Retrieves the nessus API key from the nessus6.js file
 func (n *Nessus) GetApiKey() {
 	resp, err := n.HttpClient.Get(n.Url + "/nessus6.js")
-	regex := regexp.MustCompile(`(?m)[0-9A-F]{8}\-[0-9A-F]{4}\-4[0-9A-F]{3}\-[89AB][0-9A-F]{3}\-[0-9A-F]{12}`)
+	//regex := regexp.MustCompile(`(?m)[0-9A-F]{8}\-[0-9A-F]{4}\-4[0-9A-F]{3}\-[89AB][0-9A-F]{3}\-[0-9A-F]{12}`)
+	regex := regexp.MustCompile(`[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}`)
 
 	if err != nil {
 		log.Fatal(err)
@@ -84,7 +86,7 @@ func (n *Nessus) GetApiKey() {
 }
 
 // Logs into nessus using the credentials set either manually or from the environment
-func (n *Nessus) Authenticate() {
+func (n *Nessus) Authenticate() error {
 	values := map[string]string{
 		"username": n.Username,
 		"password": n.Password,
@@ -95,22 +97,24 @@ func (n *Nessus) Authenticate() {
 	resp, err := n.HttpClient.Post(n.Url+"/session", "application/json", bytes.NewBuffer(jsonValues))
 
 	if err != nil {
-		log.Fatal(err)
+		return errors.New("Failed to contact Nessus")
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		log.Fatal(err)
+		return errors.New("Failed to parse nessus response during auth")
 	}
 
 	token, err := jsonparser.GetString(body, "token")
 
 	if err != nil {
-		log.Fatal("Authention Failure")
+		return errors.New("Authentication Failure")
 	}
 
 	n.Token = token
+
+	return nil
 }
 
 // Waits for the specified scan to finish
@@ -136,14 +140,16 @@ func (n *Nessus) Wait(scanId int) error {
 			return err
 		}
 
-		status, err := jsonparser.GetString(body, "status")
+		status, err := jsonparser.GetString(body, "info", "status")
 		if err != nil {
 			return err
 		}
 
 		if status == "completed" {
+			log.Println("scan complete")
 			return nil
 		} else {
+			log.Println("still waiting")
 			time.Sleep(time.Second * 30)
 		}
 
@@ -157,7 +163,7 @@ func (n *Nessus) ExportAsNessus(scanId int) (string, error) {
 	}
 	jsonValues, _ := json.Marshal(values)
 
-	req, err := http.NewRequest("POST", n.Url+fmt.Sprintf("/scans/%d/export"), bytes.NewBuffer(jsonValues))
+	req, err := http.NewRequest("POST", n.Url+fmt.Sprintf("/scans/%d/export", scanId), bytes.NewBuffer(jsonValues))
 
 	if err != nil {
 		log.Fatal(err)
@@ -193,20 +199,25 @@ func (n *Nessus) ExportAsNessus(scanId int) (string, error) {
 		req.Header.Set("X-API-Token", n.ApiKey)
 		req.Header.Set("Content-Type", "application/json")
 
+		log.Println("trying to export")
 		resp, err := n.HttpClient.Do(req)
+		if err != nil {
+			return "", err
+		}
 
 		if resp.StatusCode == http.StatusNotFound {
 			continue
 		}
 
 		report, _ := ioutil.ReadAll(resp.Body)
+		log.Println("exported")
 		return string(report), nil
 
 	}
 }
 
 // Launches a nessus scan using the standard template, see templates.go for more details
-func (n *Nessus) LaunchScan(name string, targets string) int {
+func (n *Nessus) LaunchScan(name string, targets string) (int, error) {
 	config := config{
 		Name:    name,
 		Targets: targets,
@@ -214,19 +225,19 @@ func (n *Nessus) LaunchScan(name string, targets string) int {
 
 	t, err := template.New("scan").Parse(BasicTemplate)
 	if err != nil {
-		log.Fatal(err)
+		errors.New("Error parsing scan template: " + err.Error())
 	}
 
 	var tpl bytes.Buffer
 
 	if err := t.Execute(&tpl, config); err != nil {
-		log.Fatal(err)
+		return 0, errors.New("Error rendering template: " + err.Error())
 	}
 
 	req, err := http.NewRequest("POST", n.Url+"/scans", bytes.NewReader(tpl.Bytes()))
 
 	if err != nil {
-		log.Fatal(err)
+		return 0, errors.New("Error launching scan: " + err.Error())
 	}
 
 	req.Header.Set("X-Cookie", "token="+n.Token)
@@ -236,17 +247,19 @@ func (n *Nessus) LaunchScan(name string, targets string) int {
 	resp, err := n.HttpClient.Do(req)
 
 	if err != nil {
-		log.Fatal(err)
+		return 0, errors.New("Error launching scan: " + err.Error())
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	fmt.Printf("%s", body)
 	if err != nil {
-		log.Fatal(err)
-	}
-	id, err := jsonparser.GetInt(body, "id")
-	if err != nil {
-		log.Fatal(err)
+		return 0, errors.New("Error launching scan: " + err.Error())
 	}
 
-	return int(id)
+	id, err := jsonparser.GetInt(body, "scan", "id")
+	if err != nil {
+		return 0, errors.New("Error launching scan: " + err.Error())
+	}
+
+	return int(id), nil
 }

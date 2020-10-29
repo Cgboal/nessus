@@ -18,7 +18,7 @@ func main() {
 	nessus_location := flag.String("host", hostname, "Nessus hostname, defaults to os hostname")
 	flag.Parse()
 
-	url := fmt.Sprintf("https://%s:8834", *nessus_location)
+	url := fmt.Sprintf("https://%s", *nessus_location)
 	nessus := nessus.NewNessus(url)
 
 	if *targets == "" || *name == "" {
@@ -34,5 +34,8 @@ func main() {
 	}
 
 	nessus.Authenticate()
-	nessus.LaunchScan(*name, *targets)
+	_, err := nessus.LaunchScan(*name, *targets)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
