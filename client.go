@@ -190,6 +190,7 @@ func (n *Nessus) ExportAsNessus(scanId int) (string, error) {
 		time.Sleep(time.Second * 5)
 
 		req, err := http.NewRequest("GET", n.Url+fmt.Sprintf("/tokens/%s/download", token), nil)
+		req.Header.Set("Accept", "text/xml")
 
 		if err != nil {
 			return "", err
