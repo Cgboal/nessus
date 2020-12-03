@@ -68,7 +68,7 @@ func NewNessus(url string) Nessus {
 func (n *Nessus) GetApiKey() {
 	resp, err := n.HttpClient.Get(n.Url + "/nessus6.js")
 	//regex := regexp.MustCompile(`(?m)[0-9A-F]{8}\-[0-9A-F]{4}\-4[0-9A-F]{3}\-[89AB][0-9A-F]{3}\-[0-9A-F]{12}`)
-	regex := regexp.MustCompile(`[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}`)
+	regex := regexp.MustCompile(`[A-F0-9]{8}-?[A-F0-9]{4}-?4[A-F0-9]{3}-?[89AB][A-F0-9]{3}-?[A-F0-9]{12}`)
 
 	if err != nil {
 		log.Fatal(err)
@@ -82,6 +82,7 @@ func (n *Nessus) GetApiKey() {
 
 	apiKey := regex.FindString(string(body))
 
+        fmt.Println(apiKey)
 	n.ApiKey = apiKey
 }
 
