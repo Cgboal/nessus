@@ -21,10 +21,10 @@ func main() {
 	url := fmt.Sprintf("https://%s", *nessus_location)
 	nessus := nessus.NewNessus(url)
 
-	if *targets == "" || *name == "" {
-		flag.Usage()
-		log.Fatal("Targets or name not specified")
-	}
+	//if *targets == "" || *name == "" {
+	//	flag.Usage()
+	//	log.Fatal("Targets or name not specified")
+	//}
 
 	if *password == "" || *username == "" {
 		log.Println("Attempting to use NESSUS_USERNAME and NESSUS_PASSWORD environment variables")
@@ -34,8 +34,5 @@ func main() {
 	}
 
 	nessus.Authenticate()
-	_, err := nessus.LaunchScan(*name, *targets)
-	if err != nil {
-		log.Fatal(err)
-	}
+	nessus.LaunchScan(*name, *targets)
 }

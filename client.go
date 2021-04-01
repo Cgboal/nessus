@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/buger/jsonparser"
 	"io/ioutil"
 	"log"
@@ -13,8 +14,17 @@ import (
 	"regexp"
 	"text/template"
 	"time"
-	"fmt"
 )
+
+type ScanList struct {
+	Scans []ScanData `json:"scans"`
+}
+
+// incomplete, update accordingly
+type ScanData struct {
+	Name string `json:"name"`
+	ID   int    `json:"id"`
+}
 
 // struct which stores relevant nessus config information
 type Nessus struct {
@@ -82,7 +92,7 @@ func (n *Nessus) GetApiKey() {
 
 	apiKey := regex.FindString(string(body))
 
-        fmt.Println(apiKey)
+	fmt.Println(apiKey)
 	n.ApiKey = apiKey
 }
 
@@ -114,6 +124,52 @@ func (n *Nessus) Authenticate() error {
 	}
 
 	n.Token = token
+
+	return nil
+}
+
+func (n *Nessus) ListScans() (ScanList, error) {
+	req, err := http.NewRequest("GET", n.Url+fmt.Sprintf("/scans?folder_id=3"), nil)
+
+	if err != nil {
+		return ScanList{}, err
+	}
+
+	req.Header.Set("X-Cookie", "token="+n.Token)
+	req.Header.Set("X-API-Token", n.ApiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := n.HttpClient.Do(req)
+	if err != nil {
+		return ScanList{}, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return ScanList{}, err
+	}
+
+	scanData := ScanList{}
+	json.Unmarshal(body, &scanData)
+
+	return scanData, nil
+}
+
+func (n *Nessus) DeleteScan(scanId int) error {
+	req, err := http.NewRequest("DELETE", n.Url+fmt.Sprintf("/scans/%d", scanId), nil)
+
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("X-Cookie", "token="+n.Token)
+	req.Header.Set("X-API-Token", n.ApiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err = n.HttpClient.Do(req)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
